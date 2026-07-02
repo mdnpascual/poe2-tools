@@ -1,0 +1,80 @@
+{
+  "name": "poe2-tools",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main/index.js",
+  "build": {
+    "appId": "com.poe2tools",
+    "npmRebuild": false,
+    "win": {
+      "target": ["portable", "nsis"],
+      "artifactName": "poe2-tools.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "poe2-tools-setup.${ext}"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!node_modules/koffi/build/koffi/!(win32_x64)",
+      "!node_modules/koffi/src",
+      "!node_modules/koffi/doc"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**",
+      "node_modules/sharp/**",
+      "node_modules/tesseract.js/**",
+      "node_modules/tesseract.js-core/**",
+      "node_modules/node-fetch/**",
+      "node_modules/whatwg-url/**",
+      "node_modules/tr46/**",
+      "node_modules/webidl-conversions/**",
+      "node_modules/bmp-js/**",
+      "node_modules/is-electron/**",
+      "node_modules/is-url/**",
+      "node_modules/regenerator-runtime/**",
+      "node_modules/wasm-feature-detect/**",
+      "node_modules/zlibjs/**",
+      "node_modules/uiohook-napi/**",
+      "node_modules/opencv-wasm/**"
+    ],
+    "extraResources": [
+      {
+        "from": "src/templates",
+        "to": "templates"
+      }
+    ]
+  },
+  "scripts": {
+    "dev:renderer": "vite --config vite.config.ts",
+    "dev": "tsc -p tsconfig.main.json && electron .",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build --config vite.config.ts",
+    "build": "npm run build:main && npm run build:renderer",
+    "release:local": "rimraf dist && npm run build && node scripts/stub-optionals.js && npx electron-builder --win && node scripts/pack-wrapper.js",
+    "postversion": "git push && git push --tags",
+    "start": "npm run build && electron ."
+  },
+  "dependencies": {
+    "koffi": "2.9.0",
+    "opencv-wasm": "^4.3.0-10",
+    "sharp": "^0.35.2",
+    "tesseract.js": "^5.1.1",
+    "uiohook-napi": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "@types/react": "19.1.6",
+    "@types/react-dom": "19.1.6",
+    "@vitejs/plugin-react": "4.4.1",
+    "concurrently": "9.1.2",
+    "electron": "^16.0.2",
+    "electron-builder": "26.0.12",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "typescript": "5.8.3",
+    "vite": "6.3.5"
+  }
+}

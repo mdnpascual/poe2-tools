@@ -1,0 +1,115 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Top-left: buff alarm indicator */
+.hud__top-left {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+}
+
+/* Pick mode hint - positioned near cursor */
+.hud__pick-hint {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+/* Centered: macro progress */
+.hud__bottom-right {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Buff indicator */
+.buff-indicator {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #6b7280;
+  transition: color 0.3s, border-color 0.3s;
+}
+
+.buff-indicator--idle {
+  opacity: 0.4;
+}
+
+.buff-indicator--monitoring {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+  animation: pulse-active 2s ease-in-out infinite;
+}
+
+.buff-indicator--alarming {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.5);
+  animation: pulse-alarm 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-active {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1.0; }
+}
+
+@keyframes pulse-alarm {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1.0; transform: scale(1.15); }
+}
+
+/* Macro progress */
+.macro-progress {
+  background: rgba(30, 30, 30, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 10px 20px;
+  min-width: 220px;
+  text-align: center;
+}
+
+.macro-progress__text {
+  color: #e5e7eb;
+  font-size: 12px;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.macro-progress__bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.macro-progress__fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 2px;
+  transition: width 0.3s;
+}

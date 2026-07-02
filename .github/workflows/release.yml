@@ -1,0 +1,65 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Read version from package.json
+        id: package_version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (TypeScript + Vite)
+        run: npm run build
+
+      - name: Stub sharp optional deps
+        run: node scripts/stub-optionals.js
+
+      - name: Package with electron-builder
+        run: npx electron-builder --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pack portable wrapper
+        run: node scripts/pack-wrapper.js
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          name: "v${{ steps.package_version.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ## PoE2-Tools v${{ steps.package_version.outputs.version }}
+
+            **Download `poe2-tools-portable.exe`** — single-file portable build, no installation needed.
+
+            Generated from commit ${{ github.sha }}
+          files: |
+            dist/poe2-tools-portable.exe
+            dist/poe2-tools-setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

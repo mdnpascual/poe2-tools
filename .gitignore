@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+
+# Electron builder output
+release/
+
+# Environment / secrets
+.env
+.env.*
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Kiro (local AI context)
+.kiro/
+
+# Logs
+*.log
+crash.log
+
+# Backup files
+*.backup.json

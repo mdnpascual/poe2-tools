@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OCR Row Preprocessor</title>
+  <style>
+    body { font-family: monospace; background: #1e1e1e; color: #eee; margin: 20px; }
+    .controls { margin-bottom: 15px; display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+    .control label { display: block; font-size: 12px; margin-bottom: 2px; }
+    .control input[type=range] { width: 200px; }
+    .control span { font-size: 11px; color: #aaa; }
+    #status { color: #0f0; margin-bottom: 10px; }
+    .row-preview { display: flex; gap: 10px; align-items: center; margin: 5px 0; border: 1px solid #333; padding: 5px; }
+    .row-preview canvas { border: 1px solid #555; }
+    .row-preview .label { font-size: 11px; color: #aaa; min-width: 80px; }
+    #rows-container { margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <h2>OCR Row Preprocessor</h2>
+  <div id="status">Loading OpenCV.js...</div>
+
+  <div class="controls">
+    <div class="control">
+      <label>Square Padding (px): <span id="padVal">4</span></label>
+      <input type="range" id="pad" min="0" max="20" value="4" step="1">
+    </div>
+    <div class="control">
+      <label>Left Crop %: <span id="leftCropVal">0</span></label>
+      <input type="range" id="leftCrop" min="0" max="50" value="0" step="1">
+    </div>
+    <div class="control">
+      <label>Binarize Threshold: <span id="binThreshVal">0</span></label>
+      <input type="range" id="binThresh" min="0" max="255" value="0" step="1">
+      <span>(0 = off, use greyscale)</span>
+    </div>
+    <div class="control">
+      <label>Invert (dark text on white)</label>
+      <input type="checkbox" id="invert">
+    </div>
+    <div class="control">
+      <label>Brightness Threshold: <span id="divThreshVal">137</span></label>
+      <input type="range" id="divThresh" min="100" max="255" value="137" step="1">
+    </div>
+  </div>
+
+  <div id="rows-container"></div>
+
+  <div style="margin-top:15px">
+    <input type="file" id="fileInput" accept="image/*">
+    <span style="color:#888; font-size:12px;">Load your reward-panel-debug.png here</span>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
+  <script>
+    let srcCanvas = null;
+    let cvReady = false;
+    let tessWorker = null;
+
+    async function getTessWorker() {
+      if (!tessWorker) {
+        tessWorker = await Tesseract.createWorker('eng');
+        await tessWorker.setParameters({
+          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' -0123456789()",
+        });
+      }
+      return tessWorker;
+    }
+
+    function onOpenCvReady() {
+      if (typeof cv === 'undefined') return;
+      if (cv.getBuildInformation) { cvReady = true; ready(); }
+      else { cv['onRuntimeInitialized'] = () => { cvReady = true; ready(); }; }
+    }
+    var Module = { onRuntimeInitialized() { cvReady = true; ready(); } };
+    function ready() { document.getElementById('status').textContent = 'OpenCV.js ready. Load an image.'; }
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          srcCanvas = document.createElement('canvas');
+          srcCanvas.width = img.width;
+          srcCanvas.height = img.height;
+          srcCanvas.getContext('2d').drawImage(img, 0, 0);
+          document.getElementById('status').textContent = `Image loaded: ${img.width}x${img.height}`;
+          processImage();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    ['pad', 'leftCrop', 'binThresh', 'divThresh'].forEach(id => {
+      document.getElementById(id).addEventListener('input', (e) => {
+        document.getElementById(id + 'Val').textContent = e.target.value;
+        if (srcCanvas) processImage();
+      });
+    });
+    document.getElementById('invert').addEventListener('change', () => { if (srcCanvas) processImage(); });
+
+    function detectSquaresFromEdges(edges, minArea, maxArea, epsilonPct, aspectTol) {
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
+      cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+      const rects = [];
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+        if (area < minArea || area > maxArea) continue;
+        const peri = cv.arcLength(cnt, true);
+        if (peri <= 0) continue;
+        const approx = new cv.Mat();
+        cv.approxPolyDP(cnt, approx, epsilonPct * peri, true);
+        if (approx.rows === 4 && cv.isContourConvex(approx)) {
+          const rect = cv.boundingRect(approx);
+          const aspect = Math.min(rect.width, rect.height) / Math.max(rect.width, rect.height);
+          if (aspect > (1 - aspectTol)) rects.push(rect);
+        }
+        approx.delete();
+      }
+      contours.delete(); hierarchy.delete();
+      return rects;
+    }
+
+    function detectAllSquares(gray) {
+      const minArea = 3000, maxArea = 10000, epsilonPct = 0.10, aspectTol = 0.05;
+      const allRects = [];
+
+      const edges1 = new cv.Mat();
+      cv.Canny(gray, edges1, 115, 255);
+      const k1 = cv.Mat.ones(3, 3, cv.CV_8U);
+      cv.dilate(edges1, edges1, k1, new cv.Point(-1, -1), 1);
+      k1.delete();
+      allRects.push(...detectSquaresFromEdges(edges1, minArea, maxArea, epsilonPct, aspectTol));
+      edges1.delete();
+
+      const edges2 = new cv.Mat();
+      cv.Canny(gray, edges2, 115, 255);
+      allRects.push(...detectSquaresFromEdges(edges2, minArea, maxArea, epsilonPct, aspectTol));
+      edges2.delete();
+
+      const thresh = new cv.Mat();
+      cv.adaptiveThreshold(gray, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 51, -1);
+      const k3 = cv.Mat.ones(3, 3, cv.CV_8U);
+      cv.morphologyEx(thresh, thresh, cv.MORPH_CLOSE, k3, new cv.Point(-1, -1), 1);
+      k3.delete();
+      allRects.push(...detectSquaresFromEdges(thresh, minArea, maxArea, epsilonPct, aspectTol));
+      thresh.delete();
+
+      const unique = [];
+      for (const r of allRects) {
+        let dup = false;
+        for (const u of unique) {
+          const ox = Math.max(0, Math.min(r.x + r.width, u.x + u.width) - Math.max(r.x, u.x));
+          const oy = Math.max(0, Math.min(r.y + r.height, u.y + u.height) - Math.max(r.y, u.y));
+          const inter = ox * oy;
+          const union = r.width * r.height + u.width * u.height - inter;
+          if (inter / union > 0.5) { dup = true; break; }
+        }
+        if (!dup) unique.push(r);
+      }
+      return unique;
+    }
+
+    function processImage() {
+      if (!cvReady || !srcCanvas) return;
+
+      const pad = +document.getElementById('pad').value;
+      const leftCropPct = +document.getElementById('leftCrop').value / 100;
+      const binThresh = +document.getElementById('binThresh').value;
+      const doInvert = document.getElementById('invert').checked;
+      const divThresh = +document.getElementById('divThresh').value;
+
+      let src, gray;
+      try {
+        src = cv.imread(srcCanvas);
+        gray = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+        const width = gray.cols;
+        const height = gray.rows;
+
+        // Detect squares
+        const squares = detectAllSquares(gray);
+
+        // White-out squares with padding
+        for (const rect of squares) {
+          const x1 = Math.max(0, rect.x - pad);
+          const y1 = Math.max(0, rect.y - pad);
+          const x2 = Math.min(width, rect.x + rect.width + pad);
+          const y2 = Math.min(height, rect.y + rect.height + pad);
+          cv.rectangle(gray, new cv.Point(x1, y1), new cv.Point(x2, y2), new cv.Scalar(255), cv.FILLED);
+        }
+
+        // Detect row dividers via brightness profile
+        const profile = new Array(height);
+        for (let y = 0; y < height; y++) {
+          let sum = 0;
+          for (let x = 0; x < width; x++) sum += gray.ucharAt(y, x);
+          profile[y] = sum / width;
+        }
+
+        const dividers = [];
+        let inDiv = false, divStart = 0;
+        for (let y = 0; y < height; y++) {
+          if (!inDiv && profile[y] < divThresh) { inDiv = true; divStart = y; }
+          else if (inDiv && profile[y] >= divThresh) {
+            inDiv = false;
+            if (y - divStart >= 2) dividers.push({ y: divStart, height: y - divStart });
+          }
+        }
+
+        // Rows: first = 0 to first divider, then between dividers (ignore after last)
+        const rows = [];
+        if (dividers.length > 0) {
+          if (dividers[0].y >= 50) rows.push({ y: 0, height: dividers[0].y });
+          for (let i = 0; i < dividers.length - 1; i++) {
+            const rowY = dividers[i].y + dividers[i].height;
+            const rowH = dividers[i + 1].y - rowY;
+            if (rowH >= 50) rows.push({ y: rowY, height: rowH });
+          }
+        }
+
+        // Render each row as a separate canvas
+        const container = document.getElementById('rows-container');
+        container.innerHTML = `<div style="margin-bottom:10px">Squares: ${squares.length} | Dividers: ${dividers.length} | Rows: ${rows.length}</div>`;
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const cropX = Math.floor(width * leftCropPct);
+          const cropW = width - cropX;
+
+          // Extract row from gray (already has squares whited out)
+          const rowMat = gray.roi(new cv.Rect(cropX, row.y, cropW, row.height));
+          let processed = rowMat.clone();
+
+          // Optional binarize
+          if (binThresh > 0) {
+            cv.threshold(processed, processed, binThresh, 255, cv.THRESH_BINARY);
+          }
+
+          // Optional invert
+          if (doInvert) {
+            cv.bitwise_not(processed, processed);
+          }
+
+          const div = document.createElement('div');
+          div.className = 'row-preview';
+          div.innerHTML = `<span class="label">Row ${i}<br>y=${row.y} h=${row.height}</span>`;
+          const canvas = document.createElement('canvas');
+          const ocrSpan = document.createElement('span');
+          ocrSpan.style.cssText = 'font-size:12px; color:#0f0; margin-left:10px; min-width:300px;';
+          ocrSpan.textContent = 'OCR: ...';
+          div.appendChild(canvas);
+          div.appendChild(ocrSpan);
+          container.appendChild(div);
+
+          cv.imshow(canvas, processed);
+          processed.delete();
+          rowMat.delete();
+
+          // Run tesseract on this row canvas
+          (async (c, span) => {
+            try {
+              const w = await getTessWorker();
+              const { data } = await w.recognize(c);
+              span.textContent = 'OCR: ' + data.text.trim().replace(/\n/g, ' ');
+            } catch (e) {
+              span.textContent = 'OCR error: ' + e;
+            }
+          })(canvas, ocrSpan);
+        }
+
+      } catch (e) {
+        document.getElementById('rows-container').innerHTML = `<div style="color:red">Error: ${e}</div>`;
+      } finally {
+        if (src) src.delete();
+        if (gray) gray.delete();
+      }
+    }
+  </script>
+</body>
+</html>
