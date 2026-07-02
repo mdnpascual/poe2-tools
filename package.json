@@ -1,13 +1,16 @@
 {
   "name": "poe2-tools",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "main": "dist/main/index.js",
   "build": {
     "appId": "com.poe2tools",
     "npmRebuild": false,
     "win": {
-      "target": ["portable", "nsis"],
+      "target": [
+        "portable",
+        "nsis"
+      ],
       "artifactName": "poe2-tools.${ext}"
     },
     "nsis": {
