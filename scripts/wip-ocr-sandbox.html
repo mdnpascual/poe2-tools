@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WIP Exchange OCR Sandbox</title>
+  <style>
+    body { font-family: monospace; background: #1e1e1e; color: #eee; margin: 20px; }
+    .controls { margin-bottom: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+    .control label { display: block; font-size: 12px; margin-bottom: 2px; }
+    .control input[type=range] { width: 150px; }
+    .control span { font-size: 11px; color: #aaa; }
+    #status { color: #0f0; margin-bottom: 10px; }
+    .main-row { display: flex; gap: 15px; align-items: flex-start; }
+    .main-row .col { flex: 1; min-width: 0; }
+    .main-row .col h3 { margin: 0 0 5px 0; font-size: 13px; color: #60a5fa; }
+    .main-row canvas { width: 100%; border: 1px solid #555; }
+    #ocr-output { background: #111; border: 1px solid #444; padding: 10px; white-space: pre-wrap; font-size: 13px; color: #0f0; height: 400px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h2>WIP Exchange OCR Sandbox</h2>
+  <div id="status">Loading OpenCV.js...</div>
+
+  <div class="controls">
+    <div class="control">
+      <label>Binarize: <span id="binThreshVal">13</span></label>
+      <input type="range" id="binThresh" min="0" max="255" value="13" step="1">
+      <span>(0=off)</span>
+    </div>
+    <div class="control">
+      <label>Invert</label>
+      <input type="checkbox" id="invert" checked>
+    </div>
+    <div class="control">
+      <label>Dilate: <span id="dilateVal">0</span></label>
+      <input type="range" id="dilate" min="0" max="5" value="0" step="1">
+      <span>iterations</span>
+    </div>
+    <div class="control">
+      <label>Erode: <span id="erodeVal">0</span></label>
+      <input type="range" id="erode" min="0" max="5" value="0" step="1">
+      <span>iterations</span>
+    </div>
+    <div class="control">
+      <label>Morph Close: <span id="closeVal">0</span></label>
+      <input type="range" id="close" min="0" max="5" value="0" step="1">
+      <span>iterations</span>
+    </div>
+    <div class="control">
+      <label>Kernel: <span id="kernelVal">2</span>x<span id="kernelVal2">2</span></label>
+      <input type="range" id="kernel" min="1" max="5" value="2" step="1">
+    </div>
+    <div class="control">
+      <label>Gaussian Blur: <span id="blurVal">0</span></label>
+      <input type="range" id="blur" min="0" max="7" value="0" step="2">
+      <span>(0=off, odd only)</span>
+    </div>
+    <div class="control">
+      <label>Left Crop %: <span id="leftCropVal">0</span></label>
+      <input type="range" id="leftCrop" min="0" max="50" value="0" step="1">
+    </div>
+    <div class="control">
+      <label>Scale: <span id="scaleVal">1</span>x</label>
+      <input type="range" id="scale" min="1" max="4" value="1" step="0.5">
+    </div>
+    <div class="control">
+      <label>Whitelist</label>
+      <input type="text" id="whitelist" value="0123456789.:/ ratiosck" style="width:250px; background:#333; color:#eee; border:1px solid #555; padding:4px;">
+    </div>
+    <div class="control">
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+    <div class="control">
+      <button id="runBtn" style="padding:6px 12px; background:#22c55e; color:#000; border:none; cursor:pointer; font-weight:bold;">Run OCR</button>
+    </div>
+  </div>
+
+  <div class="main-row">
+    <div class="col">
+      <h3>Source</h3>
+      <canvas id="source-canvas"></canvas>
+    </div>
+    <div class="col">
+      <h3>Processed</h3>
+      <canvas id="processed-canvas"></canvas>
+    </div>
+    <div class="col">
+      <h3>OCR Result</h3>
+      <div id="ocr-output">Load an image to start...</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
+  <script>
+    let srcCanvas = null;
+    let cvReady = false;
+    let tessWorker = null;
+    let lastWhitelist = null;
+
+    function onOpenCvReady() {
+      if (typeof cv === 'undefined') return;
+      if (cv.getBuildInformation) { cvReady = true; ready(); }
+      else { cv['onRuntimeInitialized'] = () => { cvReady = true; ready(); }; }
+    }
+    var Module = { onRuntimeInitialized() { cvReady = true; ready(); } };
+    function ready() { document.getElementById('status').textContent = 'OpenCV.js ready. Load an image.'; }
+
+    async function getTessWorker() {
+      const whitelist = document.getElementById('whitelist').value;
+      if (!tessWorker || whitelist !== lastWhitelist) {
+        if (tessWorker) await tessWorker.terminate();
+        tessWorker = await Tesseract.createWorker('eng');
+        if (whitelist) {
+          await tessWorker.setParameters({ tessedit_char_whitelist: whitelist });
+        }
+        lastWhitelist = whitelist;
+      }
+      return tessWorker;
+    }
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          srcCanvas = document.createElement('canvas');
+          srcCanvas.width = img.width;
+          srcCanvas.height = img.height;
+          srcCanvas.getContext('2d').drawImage(img, 0, 0);
+
+          const dispCanvas = document.getElementById('source-canvas');
+          dispCanvas.width = img.width;
+          dispCanvas.height = img.height;
+          dispCanvas.getContext('2d').drawImage(img, 0, 0);
+
+          document.getElementById('status').textContent = `Loaded: ${img.width}x${img.height}`;
+          updatePreview();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('runBtn').addEventListener('click', () => { if (srcCanvas) runOCR(); });
+
+    // Update preview on slider changes
+    ['binThresh', 'leftCrop', 'scale', 'dilate', 'erode', 'close', 'kernel', 'blur'].forEach(id => {
+      document.getElementById(id).addEventListener('input', (e) => {
+        document.getElementById(id + 'Val').textContent = e.target.value;
+        if (id === 'kernel') document.getElementById('kernelVal2').textContent = e.target.value;
+        if (srcCanvas && cvReady) updatePreview();
+      });
+    });
+    document.getElementById('invert').addEventListener('change', () => { if (srcCanvas && cvReady) updatePreview(); });
+    document.getElementById('whitelist').addEventListener('change', () => { tessWorker = null; });
+
+    function getProcessedCanvas() {
+      if (!srcCanvas || !cvReady) return null;
+
+      const binThresh = +document.getElementById('binThresh').value;
+      const doInvert = document.getElementById('invert').checked;
+      const leftCropPct = +document.getElementById('leftCrop').value / 100;
+      const scale = +document.getElementById('scale').value;
+      const dilateIter = +document.getElementById('dilate').value;
+      const erodeIter = +document.getElementById('erode').value;
+      const closeIter = +document.getElementById('close').value;
+      const kernelSize = +document.getElementById('kernel').value;
+      const blurSize = +document.getElementById('blur').value;
+
+      const width = srcCanvas.width;
+      const height = srcCanvas.height;
+      const cropX = Math.floor(width * leftCropPct);
+      const cropW = width - cropX;
+
+      // Create a temp canvas with cropped + scaled source
+      const tmpCanvas = document.createElement('canvas');
+      const scaledW = Math.floor(cropW * scale);
+      const scaledH = Math.floor(height * scale);
+      tmpCanvas.width = scaledW;
+      tmpCanvas.height = scaledH;
+      const tCtx = tmpCanvas.getContext('2d');
+      tCtx.drawImage(srcCanvas, cropX, 0, cropW, height, 0, 0, scaledW, scaledH);
+
+      // Load into OpenCV
+      let src = cv.imread(tmpCanvas);
+      let gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      src.delete();
+
+      // Gaussian blur (must be odd, 0 = skip)
+      if (blurSize > 0) {
+        const bSize = blurSize % 2 === 0 ? blurSize + 1 : blurSize;
+        cv.GaussianBlur(gray, gray, new cv.Size(bSize, bSize), 0);
+      }
+
+      // Binarize
+      if (binThresh > 0) {
+        cv.threshold(gray, gray, binThresh, 255, cv.THRESH_BINARY);
+      }
+
+      // Invert
+      if (doInvert) {
+        cv.bitwise_not(gray, gray);
+      }
+
+      // Morphological operations
+      const kernel = cv.Mat.ones(kernelSize, kernelSize, cv.CV_8U);
+
+      if (dilateIter > 0) {
+        cv.dilate(gray, gray, kernel, new cv.Point(-1, -1), dilateIter);
+      }
+
+      if (erodeIter > 0) {
+        cv.erode(gray, gray, kernel, new cv.Point(-1, -1), erodeIter);
+      }
+
+      if (closeIter > 0) {
+        cv.morphologyEx(gray, gray, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), closeIter);
+      }
+
+      kernel.delete();
+
+      // Render to output canvas
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = scaledW;
+      outCanvas.height = scaledH;
+      cv.imshow(outCanvas, gray);
+      gray.delete();
+
+      return outCanvas;
+    }
+
+    function updatePreview() {
+      const outCanvas = getProcessedCanvas();
+      if (!outCanvas) return;
+
+      const dispProc = document.getElementById('processed-canvas');
+      dispProc.width = outCanvas.width;
+      dispProc.height = outCanvas.height;
+      dispProc.getContext('2d').drawImage(outCanvas, 0, 0);
+    }
+
+    async function runOCR() {
+      if (!srcCanvas || !cvReady) return;
+
+      document.getElementById('ocr-output').textContent = 'Processing...';
+
+      const outCanvas = getProcessedCanvas();
+      if (!outCanvas) return;
+
+      // Show processed
+      const dispProc = document.getElementById('processed-canvas');
+      dispProc.width = outCanvas.width;
+      dispProc.height = outCanvas.height;
+      dispProc.getContext('2d').drawImage(outCanvas, 0, 0);
+
+      try {
+        const w = await getTessWorker();
+        const { data: result } = await w.recognize(outCanvas);
+        document.getElementById('ocr-output').textContent = result.text || '(no text detected)';
+      } catch (e) {
+        document.getElementById('ocr-output').textContent = 'OCR Error: ' + e;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -43,6 +43,17 @@ import {
   VERISIUM_SKILLS,
   VERISIUM_SUPPORTS,
 } from "./pricing/verisium-trade";
+import { initAutoUpdater, checkForUpdates } from "./auto-updater";
+// WIP module — conditionally loaded from src/private
+let isWipKeyValid: (() => boolean) | null = null;
+let wipItems: string[] = [];
+try {
+  const gate = require("../private/wip/gate");
+  isWipKeyValid = gate.isWipKeyValid;
+  wipItems = require("../private/wip/items.json");
+} catch {
+  // Private wip module not available — feature hidden
+}
 
 const user32Pick = koffi.load("user32.dll");
 const POINT_PICK = koffi.struct("POINT_PICK", { x: "int32", y: "int32" });
@@ -57,12 +68,13 @@ let sortDelay = savedSettings.sortDelay ?? 150;
 let sortBatchSize = savedSettings.sortBatchSize ?? 24;
 let buffConfig: BuffConfig = savedSettings.buffConfig;
 let poesessid: string = savedSettings.poesessid ?? "";
+let lmsModel: string = savedSettings.lmsModel ?? "lightonocr-2-1b";
 let sortResumeResolve: (() => void) | null = null;
 let captureOverlayWindow: BrowserWindow | null = null;
 const buffTracker = new BuffTracker();
 
 function persistSettings() {
-  saveSettings({ currencyConfig, actionDelay, sortDelay, sortBatchSize, buffConfig, poesessid });
+  saveSettings({ currencyConfig, actionDelay, sortDelay, sortBatchSize, buffConfig, poesessid, lmsModel });
 }
 
 let hudWindow: BrowserWindow | null = null;
@@ -277,8 +289,8 @@ async function triggerPriceCheck() {
 
     const priceRows = matches.map((m) => {
       // Check if this is a Skill: or Support: line for verisium pricing
-      const skillMatch = m.name.match(/^Skill:\s*(.+)$/i);
-      const supportMatch = m.name.match(/^Support:\s*(.+)$/i);
+      const skillMatch = m.name.match(/^Skill(?:\s+Level\s+\d+)?:?\s+(.+)$/i);
+      const supportMatch = m.name.match(/^Support:?\s+(.+)$/i);
       const gemName = skillMatch?.[1]?.trim() || supportMatch?.[1]?.trim();
 
       if (gemName) {
@@ -585,19 +597,18 @@ async function runShiftInsert() {
 }
 
 function createTray() {
-  // Create a simple 16x16 icon programmatically (blue square)
-  const icon = nativeImage.createFromBuffer(
-    Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVQ4T2Nk+M/wn4EKgJFqBjBQzYDRUEA1F4yGAtVCYTQaqBYKAIe5BhGfWd6SAAAAAElFTkSuQmCC",
-      "base64"
-    )
-  );
+  // Load tray icon from file (packaged: resources/icons/tray.png, dev: src/icons/v1/small32.png)
+  const trayIconPath = app.isPackaged
+    ? path.join(process.resourcesPath, "icons", "tray.png")
+    : path.join(process.cwd(), "src", "icons", "v1", "small32.png");
+  const icon = nativeImage.createFromPath(trayIconPath);
 
   tray = new Tray(icon);
   tray.setToolTip("PoE2-Tools");
 
   const contextMenu = Menu.buildFromTemplate([
     { label: "Show Settings", click: () => toggleSettings() },
+    { label: "Check for Updates", click: () => checkForUpdates() },
     { type: "separator" },
     {
       label: "Quit",
@@ -623,6 +634,7 @@ app.whenReady().then(() => {
   createSettingsWindow();
   startHook();
   startPriceFetcher();
+  initAutoUpdater(getPreloadPath, getRendererURL);
 
   // Start verisium trade price fetcher
   onVerisiumStatusChange((status) => {
@@ -668,6 +680,89 @@ app.whenReady().then(() => {
 
   ipcMain.handle("get-poesessid", () => {
     return poesessid;
+  });
+
+  ipcMain.handle("check-wip-key", () => {
+    return isWipKeyValid ? isWipKeyValid() : false;
+  });
+
+  ipcMain.handle("get-wip-items", () => {
+    return wipItems;
+  });
+
+  // LM Studio management (only if wip module available)
+  ipcMain.handle("get-lms-status", () => {
+    try {
+      const { getLmsStatus } = require("../private/wip/lms");
+      return getLmsStatus();
+    } catch { return { serverRunning: false, modelLoaded: false, modelName: null }; }
+  });
+
+  ipcMain.handle("ensure-lms-ready", async () => {
+    try {
+      const { ensureLmsReady } = require("../private/wip/lms");
+      return await ensureLmsReady();
+    } catch { return false; }
+  });
+
+  ipcMain.on("kill-lms", () => {
+    try {
+      const { killLms } = require("../private/wip/lms");
+      killLms();
+    } catch {}
+  });
+
+  ipcMain.handle("list-lms-models", () => {
+    try {
+      const { listLmsModels } = require("../private/wip/lms");
+      return listLmsModels();
+    } catch { return []; }
+  });
+
+  ipcMain.handle("get-lms-model", () => {
+    return lmsModel;
+  });
+
+  ipcMain.on("set-lms-model", (_e, model: string) => {
+    lmsModel = model;
+    persistSettings();
+  });
+
+  let cancelWipScan = false;
+
+  ipcMain.handle("start-wip-scan", async (_e, selectedItem: string) => {
+    cancelWipScan = false;
+    try {
+      const { ensureLmsReady } = require("../private/wip/lms");
+      const { runWipScan } = require("../private/wip/scanner");
+      const { analyzeWip } = require("../private/wip/analyzer");
+
+      const lmsReady = await ensureLmsReady(lmsModel);
+      if (!lmsReady) {
+        console.error("[wip] LM Studio not ready, aborting scan");
+        return null;
+      }
+
+      const result = await runWipScan(
+        selectedItem,
+        () => cancelWipScan,
+        (current: number, total: number, pair: string) => {
+          settingsWindow?.webContents.send("wip-progress", { current, total, pair });
+        }
+      );
+
+      if (!result) return null;
+
+      const analysis = analyzeWip(result);
+      return { ...analysis, selectedItem };
+    } catch {
+      console.error("[wip] Private module not available");
+      return null;
+    }
+  });
+
+  ipcMain.on("cancel-wip-scan", () => {
+    cancelWipScan = true;
   });
 
   ipcMain.on("set-poesessid", (_e, sessid: string) => {

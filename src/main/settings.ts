@@ -25,6 +25,7 @@ export interface AppSettings {
   sortBatchSize: number;
   buffConfig: BuffConfig;
   poesessid: string;
+  lmsModel: string;
 }
 
 const settingsPath = path.join(app.getPath("userData"), "settings.json");
@@ -50,6 +51,7 @@ const defaults: AppSettings = {
     hideOverlay: false,
   },
   poesessid: "",
+  lmsModel: "lightonocr-2-1b",
 };
 
 export function loadSettings(): AppSettings {

@@ -61,5 +61,6 @@ jobs:
           files: |
             dist/poe2-tools-portable.exe
             dist/poe2-tools-setup.exe
+            dist/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

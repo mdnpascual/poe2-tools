@@ -66,4 +66,22 @@ contextBridge.exposeInMainWorld("api", {
   getCaptureData: () => ipcRenderer.invoke("get-capture-data"),
   applyCaptureOverlay: (data: any) => ipcRenderer.send("capture-overlay-apply", data),
   cancelCaptureOverlay: () => ipcRenderer.send("capture-overlay-cancel"),
+  // Auto-updater
+  getUpdateInfo: () => ipcRenderer.invoke("get-update-info"),
+  updateInstall: () => ipcRenderer.send("update-install"),
+  updateDismiss: () => ipcRenderer.send("update-dismiss"),
+  // WIP
+  checkWipKey: () => ipcRenderer.invoke("check-wip-key"),
+  getWipItems: () => ipcRenderer.invoke("get-wip-items"),
+  startWipScan: (selectedItem: string) => ipcRenderer.invoke("start-wip-scan", selectedItem),
+  cancelWipScan: () => ipcRenderer.send("cancel-wip-scan"),
+  getLmsStatus: () => ipcRenderer.invoke("get-lms-status"),
+  ensureLmsReady: () => ipcRenderer.invoke("ensure-lms-ready"),
+  killLms: () => ipcRenderer.send("kill-lms"),
+  listLmsModels: () => ipcRenderer.invoke("list-lms-models"),
+  getLmsModel: () => ipcRenderer.invoke("get-lms-model"),
+  setLmsModel: (model: string) => ipcRenderer.send("set-lms-model", model),
+  onWipProgress: (cb: (data: { current: number; total: number; pair: string }) => void) => {
+    ipcRenderer.on("wip-progress", (_e, data) => cb(data));
+  },
 });

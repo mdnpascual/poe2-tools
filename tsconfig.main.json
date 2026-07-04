@@ -3,8 +3,8 @@
     "target": "ES2022",
     "module": "commonjs",
     "lib": ["ES2022"],
-    "outDir": "dist/main",
-    "rootDir": "src/main",
+    "outDir": "dist",
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,5 +12,6 @@
     "resolveJsonModule": true,
     "declaration": false
   },
-  "include": ["src/main/**/*"]
+  "include": ["src/main/**/*", "src/private/wip/**/*"],
+  "exclude": ["src/private/WipTab.tsx"]
 }

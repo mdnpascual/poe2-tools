@@ -465,3 +465,181 @@
 .field__status--error {
   color: #ef4444;
 }
+
+/* wip tab */
+.wip-positions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wip-pos-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.wip-dropdown {
+  position: relative;
+}
+.wip-dropdown__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  z-index: 100;
+  margin-top: 2px;
+}
+.wip-dropdown__item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #d1d5db;
+}
+.wip-dropdown__item:hover {
+  background: #374151;
+  color: #f9fafb;
+}
+.wip-dropdown__more {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+.wip-results {
+  min-height: 60px;
+}
+.wip-results__paths {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wip-results__item-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(107, 114, 128, 0.2);
+}
+.wip-path--negative {
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.05);
+}
+.wip-path--negative .wip-path__profit {
+  color: #f87171;
+}
+.wip-path {
+  padding: 8px 12px;
+  background: rgba(107, 114, 128, 0.1);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  border-radius: 6px;
+}
+.wip-path--best {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+.wip-path__badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #22c55e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.wip-path__profit {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f9fafb;
+  margin: 4px 0;
+}
+.wip-path__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.wip-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-family: monospace;
+  color: #d1d5db;
+}
+.wip-step__want {
+  color: #60a5fa;
+  min-width: 80px;
+  text-align: right;
+}
+.wip-step__have {
+  color: #fbbf24;
+  min-width: 80px;
+}
+.wip-step__amount {
+  color: #f9fafb;
+  font-weight: 600;
+}
+.wip-step__separator {
+  color: #6b7280;
+}
+.wip-path__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wip-path__volume {
+  font-size: 12px;
+  color: #6b7280;
+}
+.wip-path__input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  font-size: 13px;
+}
+.wip-path__input-label {
+  color: #9ca3af;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.wip-path__input {
+  width: 80px;
+  padding: 3px 6px;
+  font-size: 13px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  color: #f9fafb;
+  text-align: right;
+}
+.wip-path__input:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+.wip-path__input-currency {
+  color: #fbbf24;
+  font-size: 12px;
+  min-width: 60px;
+}
+.wip-path__input-arrow {
+  color: #6b7280;
+}
+.wip-path__input-result {
+  color: #22c55e;
+  font-weight: 600;
+  font-size: 13px;
+}
+.wip-path__input--capped {
+  border-color: #f59e0b;
+}
+.wip-path__input-cap {
+  color: #f59e0b;
+  font-size: 11px;
+  white-space: nowrap;
+}

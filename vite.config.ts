@@ -15,6 +15,7 @@ export default defineConfig({
         settings: path.resolve(__dirname, "src/renderer/settings.html"),
         capture: path.resolve(__dirname, "src/renderer/capture.html"),
         "price-overlay": path.resolve(__dirname, "src/renderer/price-overlay.html"),
+        update: path.resolve(__dirname, "src/renderer/update.html"),
       },
     },
   },

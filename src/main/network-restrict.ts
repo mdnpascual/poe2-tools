@@ -13,6 +13,8 @@ const ALLOWED_HOSTS = [
 
 function isAllowed(hostname: string | undefined): boolean {
   if (!hostname) return false;
+  // Always allow localhost (LM Studio, etc.)
+  if (hostname === "127.0.0.1" || hostname === "localhost") return true;
   return ALLOWED_HOSTS.some((h) => hostname === h || hostname.endsWith("." + h));
 }
 

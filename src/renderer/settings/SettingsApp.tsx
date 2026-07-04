@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import "./settings.css";
+import { WipTab } from "./wip-bridge";
 
 declare global {
   interface Window {
@@ -20,7 +21,7 @@ declare global {
   }
 }
 
-type Tab = "waystone" | "sorter" | "scanner" | "buff" | "verisium";
+type Tab = "waystone" | "sorter" | "scanner" | "buff" | "verisium" | "wip";
 
 export function SettingsApp() {
   const [tab, setTab] = useState<Tab>("waystone");
@@ -29,6 +30,7 @@ export function SettingsApp() {
   const [savedDelay, setSavedDelay] = useState(250);
   const [savedSortDelay, setSavedSortDelay] = useState(150);
   const [savedBatchSize, setSavedBatchSize] = useState(24);
+  const [showWip, setShowWip] = useState(false);
 
   useEffect(() => {
     window.api.onStashDetected((tabType) => setDetectedTab(tabType));
@@ -38,6 +40,7 @@ export function SettingsApp() {
       setSavedSortDelay(s.sortDelay);
       setSavedBatchSize(s.sortBatchSize);
     });
+    (window.api as any).checkWipKey().then((valid: boolean) => setShowWip(valid && WipTab !== null));
   }, []);
 
   return (
@@ -54,7 +57,7 @@ export function SettingsApp() {
         </div>
 
         <div className="settings__tabs">
-          {(["waystone", "sorter", "scanner", "buff", "verisium"] as Tab[]).map((t) => (
+          {(["waystone", "sorter", "scanner", "buff", "verisium", ...(showWip ? ["wip"] : [])] as Tab[]).map((t) => (
             <button
               key={t}
               className={`settings__tab ${tab === t ? "settings__tab--active" : ""}`}
@@ -65,6 +68,7 @@ export function SettingsApp() {
               {t === "scanner" && "Scanner"}
               {t === "buff" && "Buff"}
               {t === "verisium" && "Verisium"}
+              {t === "wip" && "WIP"}
             </button>
           ))}
         </div>
@@ -75,6 +79,7 @@ export function SettingsApp() {
           {tab === "scanner" && <ScannerTab />}
           {tab === "buff" && <BuffTab />}
           {tab === "verisium" && <VerisiumTab />}
+          {tab === "wip" && WipTab && <WipTab />}
         </div>
 
         <div className="settings__footer">
@@ -533,3 +538,4 @@ function VerisiumTab() {
     </div>
   );
 }
+

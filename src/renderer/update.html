@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Update Available</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+    }
+    .panel {
+      width: 430px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+    .content {
+      padding: 16px 20px;
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+    .version-info .new {
+      color: #22c55e;
+      font-weight: 600;
+    }
+    .version-info .arrow {
+      color: #6b7280;
+    }
+    .release-date {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .changelog-label {
+      font-size: 12px;
+      color: #9ca3af;
+      font-weight: 600;
+    }
+    .changelog {
+      flex: 1;
+      overflow-y: auto;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #d1d5db;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      max-height: 180px;
+    }
+    .buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      padding: 12px 20px;
+      border-top: 1px solid #2a2a2a;
+    }
+    .btn {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn--primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    .btn--primary:hover { background: #1d4ed8; }
+    .btn--secondary {
+      background: #2a2a2a;
+      color: #d1d5db;
+    }
+    .btn--secondary:hover { background: #374151; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="header">
+      <h2>Update Available</h2>
+    </div>
+    <div class="content">
+      <div class="version-info">
+        <span id="current-version">...</span>
+        <span class="arrow">→</span>
+        <span class="new" id="new-version">...</span>
+      </div>
+      <div class="release-date" id="release-date"></div>
+      <div class="changelog-label">What's new:</div>
+      <div class="changelog" id="changelog">Loading...</div>
+    </div>
+    <div class="buttons">
+      <button class="btn btn--secondary" id="btn-later">Later</button>
+      <button class="btn btn--primary" id="btn-install">Update &amp; Restart</button>
+    </div>
+  </div>
+
+  <script>
+    async function init() {
+      const info = await window.api.getUpdateInfo();
+      if (!info) return;
+
+      document.getElementById("current-version").textContent = `v${info.currentVersion}`;
+      document.getElementById("new-version").textContent = `v${info.newVersion}`;
+      document.getElementById("release-date").textContent = `Released ${new Date(info.releaseDate).toLocaleDateString()}`;
+      document.getElementById("changelog").textContent = info.releaseNotes;
+    }
+
+    document.getElementById("btn-install").addEventListener("click", () => {
+      window.api.updateInstall();
+    });
+
+    document.getElementById("btn-later").addEventListener("click", () => {
+      window.api.updateDismiss();
+    });
+
+    init();
+  </script>
+</body>
+</html>

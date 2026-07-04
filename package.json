@@ -6,6 +6,11 @@
   "build": {
     "appId": "com.poe2tools",
     "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "mdnpascual",
+      "repo": "poe2-tools"
+    },
     "win": {
       "target": [
         "portable",
@@ -47,20 +52,26 @@
       {
         "from": "src/templates",
         "to": "templates"
+      },
+      {
+        "from": "src/icons/v1/small32.png",
+        "to": "icons/tray.png"
       }
     ]
   },
   "scripts": {
     "dev:renderer": "vite --config vite.config.ts",
     "dev": "tsc -p tsconfig.main.json && electron .",
-    "build:main": "tsc -p tsconfig.main.json",
+    "build:main": "tsc -p tsconfig.main.json && node -e \"try{require('fs').cpSync('src/private/wip/items.json','dist/private/wip/items.json')}catch{}\"",
     "build:renderer": "vite build --config vite.config.ts",
     "build": "npm run build:main && npm run build:renderer",
     "release:local": "rimraf dist && npm run build && node scripts/stub-optionals.js && npx electron-builder --win && node scripts/pack-wrapper.js",
     "postversion": "git push && git push --tags",
-    "start": "npm run build && electron ."
+    "start": "npm run build && electron .",
+    "generate:arb-key": "node .kiro/generate-arb-key.js"
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "koffi": "2.9.0",
     "opencv-wasm": "^4.3.0-10",
     "sharp": "^0.35.2",

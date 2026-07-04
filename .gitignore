@@ -32,3 +32,6 @@ crash.log
 
 # Backup files
 *.backup.json
+
+# Private modules (not distributed)
+src/private/
