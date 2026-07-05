@@ -252,6 +252,7 @@ function buildSearchBody(gemName: string, isSkill: boolean): string {
     query.query.filters = {
       misc_filters: {
         filters: {
+          corrupted: { option: "false" },
           gem_level: { min: 20 },
         },
       },
