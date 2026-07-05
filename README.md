@@ -21,7 +21,7 @@ Automatically applies currency to waystones in your stash based on their affix c
 - Supports "Exalt (5 mod)" mode that skips corruption
 - Cancellable with Escape
 
-//TODO: ADD VIDEO EXPLAINING THE FEATURE
+https://github.com/mdnpascual/poe2-tools/raw/main/docs/waystone_upgrade_v2.mp4
 
 ---
 
@@ -39,13 +39,13 @@ Sorts waystones in your stash tab by a chosen stat. Scans all waystones using se
 
 Works on normal (12×12), quad (24×24), and map (12×8) stash tabs. Pauses between batches so you can deposit into your inventory.
 
-//TODO: ADD VIDEO EXPLAINING THE FEATURE
+https://github.com/mdnpascual/poe2-tools/raw/main/docs/waystone_sorter_v2.mp4
 
 ### Stash Shift-Insert
 
 Inserts a waystone at a specific sorted position by shifting all items below it down by one slot. Hold a waystone on your cursor, hover over the target slot, and press F6. The tool finds the next empty slot and executes a swap chain to shift everything down.
 
-//TODO: ADD VIDEO EXPLAINING THE FEATURE
+https://github.com/user-attachments/assets/8eed2570-5e5c-48e4-ab6a-a0a401478508
 
 ---
 
@@ -69,7 +69,7 @@ Monitors active buffs on screen using template matching. When a tracked buff exp
 - Optional HUD overlay showing buff status
 - Timer OCR for buff duration remaining
 
-//TODO: ADD VIDEO EXPLAINING THE FEATURE
+https://github.com/mdnpascual/poe2-tools/raw/main/docs/buff_alarm_v2.mp4
 
 ---
 
