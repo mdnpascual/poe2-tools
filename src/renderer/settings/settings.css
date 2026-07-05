@@ -413,9 +413,8 @@
 .field__tooltip-text {
   display: none;
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  top: calc(100% + 8px);
+  right: 0;
   background: #111;
   border: 1px solid #3a3a3a;
   border-radius: 6px;
@@ -427,6 +426,7 @@
   line-height: 1.4;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 100;
+  pointer-events: none;
 }
 
 .field__tooltip-wrap:hover .field__tooltip-text {

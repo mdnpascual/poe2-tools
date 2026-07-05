@@ -40,6 +40,9 @@ import {
   getVerisiumStatus,
   onVerisiumStatusChange,
   lookupVerisiumPrice,
+  toExaltValue,
+  loadCurrencyMap,
+  clearVerisiumCaches,
   VERISIUM_SKILLS,
   VERISIUM_SUPPORTS,
 } from "./pricing/verisium-trade";
@@ -319,7 +322,7 @@ async function triggerPriceCheck() {
               y: Math.round((m.y + m.height / 2) / monitor.scaleFactor),
               name: m.name,
               matchedName: matchedGem,
-              exaltValue: price.amount,
+              exaltValue: toExaltValue(price.amount, price.currency),
               divineValue: 0,
               confidence: 1,
               verisiumCurrency: price.currency,
@@ -634,6 +637,7 @@ app.whenReady().then(() => {
   createSettingsWindow();
   startHook();
   startPriceFetcher();
+  loadCurrencyMap();
   initAutoUpdater(getPreloadPath, getRendererURL);
 
   // Start verisium trade price fetcher
@@ -769,6 +773,10 @@ app.whenReady().then(() => {
     poesessid = sessid;
     persistSettings();
     updateSessionId(sessid);
+  });
+
+  ipcMain.on("clear-verisium-cache", () => {
+    clearVerisiumCaches();
   });
 
   // Update currency config from renderer

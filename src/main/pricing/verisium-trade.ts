@@ -8,6 +8,7 @@ import https from "https";
 import fs from "fs";
 import path from "path";
 import { app } from "electron";
+import { getPriceCache } from "./price-fetcher";
 
 // --- Gem Lists ---
 
@@ -50,8 +51,98 @@ export const VERISIUM_SUPPORTS: string[] = [
 const LEAGUE = "Runes of Aldur";
 const API_BASE = "https://www.pathofexile.com";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const STATIC_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 30_000;
+
+// --- Currency Mapping (fetched from trade API /data/static) ---
+
+interface StaticCacheFile {
+  timestamp: number;
+  currencyMap: Record<string, string>; // trade API id -> item name (e.g. "chaos" -> "Chaos Orb")
+}
+
+let currencyMap: Record<string, string> = {};
+
+function getStaticCachePath(): string {
+  return path.join(app.getPath("userData"), "trade-static-cache.json");
+}
+
+/**
+ * Load the trade API currency ID -> item name mapping.
+ * Fetches from /api/trade2/data/static and caches for 1 week.
+ */
+export async function loadCurrencyMap(): Promise<void> {
+  const cachePath = getStaticCachePath();
+
+  // Try loading from cache
+  try {
+    if (fs.existsSync(cachePath)) {
+      const data: StaticCacheFile = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+      if (Date.now() - data.timestamp < STATIC_CACHE_TTL_MS && Object.keys(data.currencyMap).length > 0) {
+        currencyMap = data.currencyMap;
+        console.log(`[verisium-trade] Loaded ${Object.keys(currencyMap).length} currency mappings from cache`);
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("[verisium-trade] Static cache read failed:", e);
+  }
+
+  // Fetch fresh from trade API
+  try {
+    const res = await httpsRequest("GET", `${API_BASE}/api/trade2/data/static`, {
+      "User-Agent": "PoE2-Tools/0.1.0",
+    });
+
+    if (res.statusCode !== 200) {
+      console.warn(`[verisium-trade] Static data fetch failed: HTTP ${res.statusCode}`);
+      return;
+    }
+
+    const json = JSON.parse(res.body);
+    const currencyGroup = json.result?.find((g: any) => g.id === "Currency");
+    if (!currencyGroup?.entries) {
+      console.warn("[verisium-trade] No Currency group in static data");
+      return;
+    }
+
+    const map: Record<string, string> = {};
+    for (const entry of currencyGroup.entries) {
+      if (entry.id && entry.text) {
+        map[entry.id] = entry.text;
+      }
+    }
+
+    currencyMap = map;
+    console.log(`[verisium-trade] Loaded ${Object.keys(map).length} currency mappings from API`);
+
+    // Save to cache
+    const cacheData: StaticCacheFile = { timestamp: Date.now(), currencyMap: map };
+    fs.writeFileSync(cachePath, JSON.stringify(cacheData, null, 2));
+  } catch (e) {
+    console.error("[verisium-trade] Failed to fetch static data:", e);
+  }
+}
+
+/**
+ * Convert a trade API price (amount + currency ID) to exalt value
+ * using the poe2scout price cache. Returns the amount directly if currency is exalted
+ * or if the currency can't be found in the cache.
+ */
+export function toExaltValue(amount: number, currency: string): number {
+  if (currency === "exalted") return amount;
+
+  const cacheName = currencyMap[currency];
+  if (!cacheName) return amount; // unknown currency, return raw
+
+  const cache = getPriceCache();
+  const entry = cache.find((p) => p.name === cacheName);
+  if (!entry || entry.chaosValue <= 0) return amount;
+
+  // chaosValue in the price cache is actually the exalt value of 1 unit
+  return amount * entry.chaosValue;
+}
 
 // --- Types ---
 
@@ -80,6 +171,8 @@ class RateLimiter {
 
   async waitBeforeRequest(): Promise<void> {
     const delay = this.nextReady - Date.now();
+    // Mark as in-flight to prevent overlapping requests on the same limiter
+    this.nextReady = Infinity;
     if (delay > 0) {
       console.log(`[verisium-trade] Rate limit wait: ${Math.round(delay / 1000)}s`);
       await sleep(delay);
@@ -113,18 +206,25 @@ class RateLimiter {
   private calculateDelay(ruleStr: string, stateStr: string): number {
     const rule = ruleStr.split(":");
     const state = stateStr.split(":");
+    const now = Date.now();
     const maxHits = Number(rule[0]);
     const period = Number(rule[1]) * 1000;
     const hits = Number(state[0]);
     const timeout = Number(state[2]) * 1000;
+    const periodResponses = this.responseTimes.filter((t) => now - t < period);
 
     if (timeout > 0) return timeout + 5000;
+
+    // Backfill responseTimes if the API reports more hits than we've tracked
+    // (e.g. other requests from the same account counted against us)
+    if (periodResponses.length < hits) {
+      this.responseTimes.push(...Array(hits - periodResponses.length).fill(now));
+    }
 
     const remaining = maxHits - hits;
     if (remaining > 1) return 500;
 
-    const periodResponses = this.responseTimes.filter((t) => Date.now() - t < period);
-    return period - (periodResponses[0] ? Date.now() - periodResponses[0] : 0) + 1000;
+    return period - (periodResponses[0] ? now - periodResponses[0] : 0) + 1000;
   }
 }
 
@@ -147,6 +247,20 @@ export function getVerisiumStatus(): VerisiumStatus {
 
 export function onVerisiumStatusChange(cb: (status: VerisiumStatus) => void): void {
   statusCallback = cb;
+}
+
+/**
+ * Clear all verisium-related cached data (prices + static currency mapping).
+ */
+export function clearVerisiumCaches(): void {
+  const pricePath = getCachePath();
+  const staticPath = getStaticCachePath();
+  try { if (fs.existsSync(pricePath)) fs.unlinkSync(pricePath); } catch {}
+  try { if (fs.existsSync(staticPath)) fs.unlinkSync(staticPath); } catch {}
+  priceCache = {};
+  currencyMap = {};
+  setStatus({ state: "idle", valid: undefined });
+  console.log("[verisium-trade] All caches cleared");
 }
 
 /**
@@ -300,18 +414,19 @@ async function searchGem(
   sessionId: string,
   gemName: string,
   isSkill: boolean,
-  rateLimiter: RateLimiter
+  searchRateLimiter: RateLimiter,
+  fetchRateLimiter: RateLimiter
 ): Promise<VerisiumPrice | null> {
   const headers = buildHeaders(sessionId);
   const body = buildSearchBody(gemName, isSkill);
   const searchUrl = `${API_BASE}/api/trade2/search/poe2/${encodeURIComponent(LEAGUE)}`;
 
-  // Wait for rate limit
-  await rateLimiter.waitBeforeRequest();
+  // Wait for search rate limit
+  await searchRateLimiter.waitBeforeRequest();
 
   // Search request
   const searchRes = await httpsRequest("POST", searchUrl, headers, body);
-  rateLimiter.handleResponse(searchRes.headers);
+  searchRateLimiter.handleResponse(searchRes.headers);
 
   if (searchRes.statusCode === 403) {
     throw new Error("INVALID_SESSION");
@@ -346,10 +461,10 @@ async function searchGem(
   const searchId = searchJson.id;
   const fetchUrl = `${API_BASE}/api/trade2/fetch/${firstItemId}?query=${searchId}&realm=poe2`;
 
-  await rateLimiter.waitBeforeRequest();
+  await fetchRateLimiter.waitBeforeRequest();
 
   const fetchRes = await httpsRequest("GET", fetchUrl, headers);
-  rateLimiter.handleResponse(fetchRes.headers);
+  fetchRateLimiter.handleResponse(fetchRes.headers);
 
   if (fetchRes.statusCode === 403) {
     throw new Error("INVALID_SESSION");
@@ -383,7 +498,8 @@ async function searchGem(
 
 async function fetchAllPrices(sessionId: string): Promise<void> {
   isFetching = true;
-  const rateLimiter = new RateLimiter();
+  const searchRateLimiter = new RateLimiter();
+  const fetchRateLimiter = new RateLimiter();
   const allGems = [
     ...VERISIUM_SKILLS.map((name) => ({ name, isSkill: true })),
     ...VERISIUM_SUPPORTS.map((name) => ({ name, isSkill: false })),
@@ -400,7 +516,7 @@ async function fetchAllPrices(sessionId: string): Promise<void> {
 
     while (retries < MAX_RETRIES) {
       try {
-        price = await searchGem(sessionId, gem.name, gem.isSkill, rateLimiter);
+        price = await searchGem(sessionId, gem.name, gem.isSkill, searchRateLimiter, fetchRateLimiter);
         break;
       } catch (e: any) {
         if (e.message === "INVALID_SESSION") {

@@ -507,7 +507,8 @@ function VerisiumTab() {
         <div className="field__row">
           <input
             type="password"
-            className={`field__input field__input--wide${isError ? " field__input--error" : ""}`}
+            className={`field__input${isError ? " field__input--error" : ""}`}
+            style={{ flex: 1 }}
             value={sessid}
             onChange={handleSessidChange}
             placeholder="Paste your session ID here"
@@ -518,6 +519,12 @@ function VerisiumTab() {
               Fetches prices for Verisium Skill and Support gems from the trade API
             </span>
           </span>
+          <button
+            className="btn btn--danger"
+            onClick={() => (window.api as any).clearVerisiumCache()}
+          >
+            Clear cached data
+          </button>
         </div>
         <span className={`field__status${isError ? " field__status--error" : ""}`}>
           {statusText}
