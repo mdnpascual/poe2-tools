@@ -194,12 +194,14 @@ class RateLimiter {
     ].filter(Boolean);
 
     if (rules.length === 0) {
-      this.nextReady = Date.now() + 1000;
+      this.nextReady = Date.now() + 5000;
       return;
     }
 
     const delays = rules.map((rule, i) => this.calculateDelay(rule, states[i] || "0:0:0"));
-    const maxDelay = Math.max(...delays, 500);
+    let maxDelay = Math.max(...delays, 5000);
+    // Double delays of 30s or greater as extra safety margin
+    if (maxDelay >= 30_000) maxDelay *= 2;
     this.nextReady = Date.now() + maxDelay;
   }
 
@@ -222,9 +224,9 @@ class RateLimiter {
     }
 
     const remaining = maxHits - hits;
-    if (remaining > 1) return 500;
+    if (remaining > 1) return 5000;
 
-    return period - (periodResponses[0] ? now - periodResponses[0] : 0) + 1000;
+    return Math.max(period - (periodResponses[0] ? now - periodResponses[0] : 0) + 1000, 5000);
   }
 }
 
