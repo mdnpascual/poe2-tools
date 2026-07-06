@@ -297,9 +297,46 @@ async function triggerPriceCheck() {
       const gemName = skillMatch?.[1]?.trim() || supportMatch?.[1]?.trim();
 
       if (gemName) {
-        // This is a verisium gem — use trade API price
+        // This is a verisium gem — use trade API price (fuzzy match to handle OCR noise)
         const allGems = [...VERISIUM_SKILLS, ...VERISIUM_SUPPORTS];
-        const matchedGem = allGems.find((g) => g.toLowerCase() === gemName.toLowerCase());
+        const gemNameLower = gemName.toLowerCase();
+
+        // Try exact match first, then fuzzy match
+        let matchedGem = allGems.find((g) => g.toLowerCase() === gemNameLower);
+        if (!matchedGem) {
+          // Fuzzy: find best match by checking if gem name is a prefix of OCR text or vice versa,
+          // then fall back to Levenshtein distance
+          let bestScore = 0;
+          let bestIsPrefix = false;
+          for (const g of allGems) {
+            const gLower = g.toLowerCase();
+            // Check if OCR text starts with the gem name (trailing noise)
+            if (gemNameLower.startsWith(gLower) && gLower.length >= 5) {
+              const score = gLower.length / gemNameLower.length;
+              if (score > bestScore) { bestScore = score; matchedGem = g; bestIsPrefix = true; }
+              continue;
+            }
+            // Levenshtein on shorter strings
+            const maxLen = Math.max(gemNameLower.length, gLower.length);
+            if (maxLen > 50) continue;
+            const m = gemNameLower.length, n = gLower.length;
+            const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+            for (let i = 0; i <= m; i++) dp[i][0] = i;
+            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            for (let i = 1; i <= m; i++) {
+              for (let j = 1; j <= n; j++) {
+                dp[i][j] = gemNameLower[i - 1] === gLower[j - 1]
+                  ? dp[i - 1][j - 1]
+                  : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+              }
+            }
+            const score = 1 - dp[m][n] / maxLen;
+            if (score > bestScore) { bestScore = score; matchedGem = g; bestIsPrefix = false; }
+          }
+          // Prefix matches are high-confidence (trailing noise is common), others need higher threshold
+          const threshold = bestIsPrefix ? 0.55 : 0.7;
+          if (bestScore < threshold) matchedGem = undefined;
+        }
 
         if (matchedGem) {
           const price = verisiumPrices[matchedGem];
