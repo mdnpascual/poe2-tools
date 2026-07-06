@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld("api", {
   getPoesessid: () => ipcRenderer.invoke("get-poesessid"),
   setPoesessid: (sessid: string) => ipcRenderer.send("set-poesessid", sessid),
   clearVerisiumCache: () => ipcRenderer.send("clear-verisium-cache"),
+  getPriceCacheTimestamps: () => ipcRenderer.invoke("get-price-cache-timestamps"),
   onVerisiumStatus: (cb: (status: { state: string; progress?: string; valid?: boolean }) => void) => {
     ipcRenderer.on("verisium-status", (_e, status) => cb(status));
   },

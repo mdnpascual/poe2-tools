@@ -318,7 +318,7 @@ export async function startVerisiumFetcher(sessionId: string): Promise<void> {
 
 /**
  * Called when the user changes their POESESSID in settings.
- * Validates and re-fetches if different from cached session.
+ * Only re-fetches if the cache is expired, missing, or the previous fetch failed.
  */
 export async function updateSessionId(sessionId: string): Promise<void> {
   if (!sessionId) {
@@ -327,6 +327,27 @@ export async function updateSessionId(sessionId: string): Promise<void> {
     return;
   }
   if (isFetching) return;
+
+  // Skip refetch if cache is still fresh and valid
+  const cachePath = getCachePath();
+  try {
+    if (fs.existsSync(cachePath)) {
+      const data: CacheFile = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+      if (
+        Date.now() - data.timestamp < CACHE_TTL_MS &&
+        data.prices &&
+        Object.keys(data.prices).length > 0 &&
+        currentStatus.valid !== false
+      ) {
+        priceCache = data.prices;
+        const count = Object.values(priceCache).filter((p) => p !== null).length;
+        console.log(`[verisium-trade] Cache still fresh (${Math.round((Date.now() - data.timestamp) / 3600000)}h old), skipping refetch`);
+        setStatus({ state: "done", progress: `Prices loaded (${count}/${VERISIUM_SKILLS.length + VERISIUM_SUPPORTS.length})`, valid: true });
+        return;
+      }
+    }
+  } catch {}
+
   await fetchAllPrices(sessionId);
 }
 

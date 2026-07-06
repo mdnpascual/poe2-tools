@@ -476,11 +476,13 @@ function VerisiumTab() {
   const [ocrLines, setOcrLines] = useState<string[]>([]);
   const [sessid, setSessid] = useState("");
   const [status, setStatus] = useState<{ state: string; progress?: string; valid?: boolean }>({ state: "idle" });
+  const [cacheTimestamps, setCacheTimestamps] = useState<{ priceCache: number | null; verisiumCache: number | null } | null>(null);
 
   useEffect(() => {
     (window.api as any).onOcrLines((lines: string[]) => setOcrLines(lines));
     (window.api as any).getPoesessid().then((id: string) => setSessid(id || ""));
     (window.api as any).onVerisiumStatus((s: { state: string; progress?: string; valid?: boolean }) => setStatus(s));
+    (window.api as any).getPriceCacheTimestamps().then((ts: { priceCache: number | null; verisiumCache: number | null }) => setCacheTimestamps(ts));
   }, []);
 
   const handleSessidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -489,16 +491,43 @@ function VerisiumTab() {
     (window.api as any).setPoesessid(value);
   };
 
+  const formatTimestamp = (ms: number | null): string => {
+    if (!ms) return "never";
+    const date = new Date(ms);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
   const isError = status.valid === false;
-  const statusText = status.state === "idle"
-    ? (sessid ? "Waiting..." : "Enter POESESSID to fetch prices")
-    : status.state === "fetching"
-    ? `Fetching prices... (${status.progress || ""})`
-    : status.state === "done"
-    ? status.progress || "Prices loaded"
-    : status.state === "error"
-    ? status.progress || "Error"
-    : "";
+  let statusText: string;
+  if (status.state === "idle") {
+    if (!sessid) {
+      statusText = "Enter POESESSID to fetch prices";
+    } else {
+      const parts: string[] = ["Waiting..."];
+      if (cacheTimestamps) {
+        const pLabel = formatTimestamp(cacheTimestamps.priceCache);
+        const vLabel = formatTimestamp(cacheTimestamps.verisiumCache);
+        parts.push(`Prices: ${pLabel} · Trade API: ${vLabel}`);
+      }
+      statusText = parts.join(" — ");
+    }
+  } else if (status.state === "fetching") {
+    statusText = `Fetching prices... (${status.progress || ""})`;
+  } else if (status.state === "done") {
+    statusText = status.progress || "Prices loaded";
+  } else if (status.state === "error") {
+    statusText = status.progress || "Error";
+  } else {
+    statusText = "";
+  }
 
   return (
     <div className="tab-content">

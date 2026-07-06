@@ -779,6 +779,17 @@ app.whenReady().then(() => {
     clearVerisiumCaches();
   });
 
+  ipcMain.handle("get-price-cache-timestamps", () => {
+    const userData = app.getPath("userData");
+    const priceCachePath = path.join(userData, "price-cache.json");
+    const verisiumCachePath = path.join(userData, "verisium-price-cache.json");
+    let priceCache: number | null = null;
+    let verisiumCache: number | null = null;
+    try { priceCache = fs.statSync(priceCachePath).mtimeMs; } catch {}
+    try { verisiumCache = fs.statSync(verisiumCachePath).mtimeMs; } catch {}
+    return { priceCache, verisiumCache };
+  });
+
   // Update currency config from renderer
   ipcMain.on("update-currency-config", (_e, config: CurrencyConfig) => {
     currencyConfig = config;
