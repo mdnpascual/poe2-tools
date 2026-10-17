@@ -75,7 +75,7 @@ contextBridge.exposeInMainWorld("api", {
   // WIP
   checkWipKey: () => ipcRenderer.invoke("check-wip-key"),
   getWipItems: () => ipcRenderer.invoke("get-wip-items"),
-  startWipScan: (selectedItem: string) => ipcRenderer.invoke("start-wip-scan", selectedItem),
+  startWipScan: (selectedItem: string, fullScan?: boolean) => ipcRenderer.invoke("start-wip-scan", selectedItem, fullScan),
   cancelWipScan: () => ipcRenderer.send("cancel-wip-scan"),
   getLmsStatus: () => ipcRenderer.invoke("get-lms-status"),
   ensureLmsReady: () => ipcRenderer.invoke("ensure-lms-ready"),

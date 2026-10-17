@@ -771,7 +771,7 @@ app.whenReady().then(() => {
 
   let cancelWipScan = false;
 
-  ipcMain.handle("start-wip-scan", async (_e, selectedItem: string) => {
+  ipcMain.handle("start-wip-scan", async (_e, selectedItem: string, fullScan?: boolean) => {
     cancelWipScan = false;
     try {
       const { ensureLmsReady } = require("../private/wip/lms");
@@ -789,7 +789,8 @@ app.whenReady().then(() => {
         () => cancelWipScan,
         (current: number, total: number, pair: string) => {
           settingsWindow?.webContents.send("wip-progress", { current, total, pair });
-        }
+        },
+        fullScan ?? false
       );
 
       if (!result) return null;
